@@ -82,11 +82,11 @@ def _err(error_msg: str):
     sys.exit(1)
 
 
-def get_default_settings(database_id: str, api_key: str):
+def get_default_settings(database_id: str, api_key: str) -> dict:
     """
-    :param database_id: A valid Notion's database id accessible via the api_key.
-    :param api_key: A valid Notion's api_key that has access to the database under database_id.
-    :returns: A default settings dictionary with the users information.
+    :param database_id: str, A valid Notion's database id accessible via the api_key.
+    :param api_key: str, A valid Notion's api_key that has access to the database under database_id.
+    :returns: dict, A default settings dictionary with the users information.
     :raises TypeError: if database_id or api_key are not string objects.
     """
     if not (type(database_id) == str):
@@ -110,14 +110,28 @@ def get_default_settings(database_id: str, api_key: str):
 class NBudgetController:
     """ Controller class for budget databases on Notion """
 
-    def __init__(self, settings: dict = None, raises: bool =True):
+    def __init__(self, settings: dict = None, raises: bool = True):
         """
         TODO: Document
         :param settings:
-        :param raises:
+        :param raises: bool, When we run the script via terminal we want the errors to be printed
+        into the terminal, when the script is being ran as a module, we want to raise our errors
+        instead. By default we raise.
         """
         self.settings = settings
         self.raises = raises
+
+    def _wrap_error(self, error_msg: str, e):
+        """
+        Wraps an error to decide if raising or calling _err depending on self.raises
+        :param error_msg: str, error message to print
+        :param e: Exception, exception to raise
+        :raises e: if self.raises, else SystemExit
+        """
+        if self.raises:
+            raise e(error_msg)
+        else:
+            _err(error_msg)
 
     def _api_call(self, data=None):
         """ TODO: Document """
@@ -140,8 +154,46 @@ class NBudgetController:
         :return:
         """
 
-    def __format_date(self, date: str):
-        """ TODO: Document """
+    def _format_date(self, date: str, date_input_format: str) -> datetime.date:
+        """
+        Transform a date string inputted by the user into a datetime.date using
+        a date_input_format specified in the settings.
+
+        We don't care if the user has done something like: D/M/Y/Y, we grab the first occurrence.
+
+        :param date: str of date to be parsed by format specified on date_input_format
+        :param date_input_format: str of format D/M/Y (D, M and Y separated by /)
+        :return: datetime.date object
+        :raises InvalidDateFormat: If there is a missing key (D, M, Y) in date_input_format
+        :raises InvalidDate: If there is a missing value in date
+        :raises InvalidDateRange: If either day, month, or year is beyond range
+        """
+        # Split by /
+        split_date_input_format, split_date = date_input_format.split('/'), date.split('/')
+
+        # Use format positions as indexes for date positions
+        try:
+            year, month, day = split_date[split_date_input_format.index('Y')], \
+                               split_date[split_date_input_format.index('M')], \
+                               split_date[split_date_input_format.index('D')]
+        except ValueError:  # Missing key in date_input_format
+            self._wrap_error('Invalid date_input_format in settings file: %s'
+                             % date_input_format, self.InvalidDateFormat)
+        except IndexError:  # Missing value in date
+            self._wrap_error('Invalid date: %s' % date, self.InvalidDate)
+        else:
+            try:
+                return datetime.date(int(year), int(month), int(day))
+            except ValueError:  # Either day, month, or year is beyond range
+                self._wrap_error('Invalid date range: %s' % date, self.InvalidDateRange)
+
+    class InvalidDateRange(Exception):
+        """ The date is beyond range """
+    class InvalidDate(Exception):
+        """ The date the user inputted is invalid """
+
+    class InvalidDateFormat(Exception):
+        """ The date format in the settings file is invalid """
 
 
 def _read_settings(*, filepath='settings.json') -> dict:
@@ -213,8 +265,7 @@ def _chose_option(prompt: str, valid_options: List[str]) -> str:
 class GetTags(argparse.Action):
     """ Creates a class for NBudgetController and calls get_tags() """
     def __call__(self, parser, namespace, values, option_string):
-        NBC = NBudgetController(_read_settings())
-        NBC.get_tags()
+        NBudgetController(_read_settings(), raises=False).get_tags()
         parser.exit()
 
 

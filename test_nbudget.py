@@ -167,7 +167,54 @@ class Test(unittest.TestCase):
 
 class TestNBudgetController(unittest.TestCase):
     """ Tests for the NBudgetController class """
+    def setUp(self) -> None:
+        """ Set up by creating an NBC """
+        self.NBC = nbudget.NBudgetController(None)
 
+    def test__wrap_error_raises_on(self):
+        """ Tests that _wrap_error raises Exception passed in when self.raises is True """
+        self.NBC.raises = True
+        self.assertRaises(TypeError, self.NBC._wrap_error, '', TypeError)
+
+    @mock.patch('nbudget._err', create=True)
+    def test__wrap_error_raises_off(self, mocked__err):
+        """ Tests that _wrap_error calls _err() instead when self.raises is False """
+        self.NBC.raises = False
+        self.NBC._wrap_error('', TypeError)
+        mocked__err.assert_called()
+
+    def test__format_date_right(self):
+        """ Test that _format_date works right. """
+        values = [
+            ['D/M/Y', [10, 2, 1996]],
+            ['M/Y/D', [2, 1996, 10]],
+            ['Y/D/M/M', [1996, 10, 2]],  # Extra-check that this one doesn't fail
+
+            ['M/D/Y', [2, 10, 1996]],
+            ['D/Y/M', [10, 1996, 2]],
+            ['Y/M/D', [1996, 2, 10]],
+        ]
+        for v in values:
+            f, values, expected = v[0], '/'.join([str(i) for i in v[1]]), [10, 2, 1996]
+            response = self.NBC._format_date(values, f)
+            self.assertEqual(expected, [response.day, response.month, response.year])
+
+    def test__format_date_raises_InvalidDateFormat(self):
+        """ Test that _format_date raises InvalidDateFormat on invalid date_input_formats. """
+        self.assertRaises(self.NBC.InvalidDateFormat, self.NBC._format_date, '', '')  # Empty
+        self.assertRaises(self.NBC.InvalidDateFormat, self.NBC._format_date, '', 'D/M')  # Less
+
+    def test__format_date_raises_InvalidDate(self):
+        """ Test that _format_date raises InvalidDate on invalid date. """
+        self.assertRaises(self.NBC.InvalidDate, self.NBC._format_date, '', 'D/M/Y')  # Empty
+        self.assertRaises(self.NBC.InvalidDate, self.NBC._format_date, 'D/M', 'D/M/Y')  # Less
+
+    def test__format_date_raises_InvalidDateRange(self):
+        """ Test that _format_date raises InvalidDateRange on invalid date ranges. """
+        self.assertRaises(self.NBC.InvalidDateRange, self.NBC._format_date, '40/2/2020', 'D/M/Y')
+        self.assertRaises(self.NBC.InvalidDateRange, self.NBC._format_date, '30/20/2020', 'D/M/Y')
+        self.assertRaises(self.NBC.InvalidDateRange, self.NBC._format_date, '30/20/1000000000',
+                          'D/M/Y')
 
 if __name__ == '__main__':
     unittest.main()
