@@ -472,7 +472,7 @@ if __name__ == '__main__':
 
     i_help = 'Record is considered an income instead of an expense.'
     argument_parser.add_argument('-i', '--income', action='store_true', help=i_help)
-    d_help = 'The date to use for the expense record, if not used the current day will be used..'
+    d_help = 'The date to use for the expense record, if not used the current day will be used.'
     argument_parser.add_argument('-d', '--date', metavar='DATE', type=str, nargs=1, help=d_help)
     concept_help = 'The concept for the record.'
     argument_parser.add_argument('concept', metavar='CONCEPT', type=str, nargs=1, help=concept_help)
@@ -482,7 +482,6 @@ if __name__ == '__main__':
     argument_parser.add_argument('tags', metavar='TAG', type=str, nargs='*', help=tag_help)
 
     parsed_arguments = argument_parser.parse_args()
-    print(parsed_arguments)
     NBC = NBudgetController(_read_settings(), raises=False)
     NBC.insert_record(parsed_arguments.concept[0], parsed_arguments.amount[0],
                       parsed_arguments.tags, parsed_arguments.income, parsed_arguments.date[0]
