@@ -248,34 +248,51 @@ class TestNBudgetController(unittest.TestCase):
         self.assertEqual(expected, self.NBC.get_tags())
 
     @mock.patch('nbudget.NBudgetController._api_call', create=True)
-    def test_get_tags_not_expected_structure_raises_APIParsingError(self, mocked_api_call):
-        """ Test get_tags() return APIParsingError when it cannot parse the response """
-        # Wrong tag column name, one other option
+    def test_get_tags_unexpected_structure_raises_APIParsingError_wrongTagName_OneOtherOption(
+            self, mocked_api_call):
+        """ Test get_tags() return APIParsingError when it cannot parse the response due to wrong
+        tag column name, one other option """
         return_value = {'properties': {
             'Other name': {'multi_select': {'options': [{'name': 'a'}, {'name': 'b'}]}}}}
         mocked_api_call.side_effect = [return_value]
         self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
 
-        # Wrong tag column name, several other options
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_get_tags_unexpected_structure_raises_APIParsingError_wrongTagName_ManyOtherOptions(
+            self, mocked_api_call):
+        """ Test get_tags() return APIParsingError when it cannot parse the response due to wrong
+        tag column name, several other options """
         return_value = {'properties': {
             'Other name': {'multi_select': {'options': [{'name': 'a'}, {'name': 'b'}]}},
             'Another name': {'multi_select': {'options': [{'name': 'a'}, {'name': 'b'}]}}}}
         mocked_api_call.side_effect = [return_value]
         self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
 
-        # Wrong tag column name, no options
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_get_tags_unexpected_structure_raises_APIParsingError_wrongTagName_NoOtherOptions(
+            self, mocked_api_call):
+        """ Test get_tags() return APIParsingError when it cannot parse the response due to wrong
+        tag column name, no other options """
         return_value = {'properties': {
             'Other name': {'select': {'options': [{'name': 'a'}, {'name': 'b'}]}}}}
         mocked_api_call.side_effect = [return_value]
         self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
 
-        # Wrong tag column type
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_get_tags_unexpected_structure_raises_APIParsingError_wrongTagColumnType(
+            self, mocked_api_call):
+        """ Test get_tags() return APIParsingError when it cannot parse the response due to wrong
+        tag column type """
         return_value = {'properties': {'Tags': {'select': {'options': [{'name': 'a'},
                                                                        {'name': 'b'}]}}}}
         mocked_api_call.side_effect = [return_value]
         self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
 
-        # Wrong structure all together
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_get_tags_unexpected_d_structure_raises_APIParsingError_wrongStructure(
+            self, mocked_api_call):
+        """ Test get_tags() return APIParsingError when it cannot parse the response due to extreme
+        difference. """
         return_value = {'abd': {'ee': {'ff': {'ag32': [{'name': 'a'}, {'name': 'b'}]}}}}
         mocked_api_call.side_effect = [return_value]
         self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
