@@ -59,6 +59,7 @@ The settings.json file is structured as follows:
         'tags_name': 'Tags'           - Name of the Tags column in the Notion's database
 
 """
+import sys
 import argparse
 import json
 import datetime
@@ -71,17 +72,31 @@ _SETTINGS_KEY_VALIDATION = ['database_id', 'api_key', 'date_input_format', 'tag_
                             'type_name', 'date_name', 'concept_name', 'amount_name', 'tags_name']
 
 
+def _err(error_msg: str):
+    """
+    Avoid cluttering stdout with raises. Print error message and exit.
+    :param error_msg: str, error message to print.
+    :raises SystemExit -> code 1
+    """
+    print(f"[!] Error: {error_msg}")
+    sys.exit(1)
+
+
 def get_default_settings(database_id: str, api_key: str):
     """
-    TODO: Document
-
-    :param database_id:
-    :param api_key:
-    :return:
+    :param database_id: A valid Notion's database id accessible via the api_key.
+    :param api_key: A valid Notion's api_key that has access to the database under database_id.
+    :returns: A default settings dictionary with the users information.
+    :raises TypeError: if database_id or api_key are not string objects.
     """
-    default_settings = {
-        'database_id': None,
-        'api_key': None,
+    if not (type(database_id) == str):
+        raise TypeError('Expected str for database_id, got: %s' % database_id)
+    if not (type(api_key) == str):
+        raise TypeError('Expected str for database_id, got: %s' % database_id)
+
+    return {
+        'database_id': database_id,
+        'api_key': api_key,
         'date_input_format': 'D/M/Y',
         'tag_separator': '\n',
         'type_name': 'Type',
@@ -90,23 +105,19 @@ def get_default_settings(database_id: str, api_key: str):
         'amount_name': 'Amount',
         'tags_name': 'Tags'
     }
-    return default_settings
 
 
 class NBudgetController:
     """ Controller class for budget databases on Notion """
 
-    def __init__(self, settings: dict = None):
+    def __init__(self, settings: dict = None, raises: bool =True):
         """
+        TODO: Document
         :param settings:
+        :param raises:
         """
         self.settings = settings
-
-    def _err(self, error_msg):
-        """ TODO: Document """
-
-    def _msg(self, msg):
-        """ TODO: Document """
+        self.raises = raises
 
     def _api_call(self, data=None):
         """ TODO: Document """
@@ -133,42 +144,102 @@ class NBudgetController:
         """ TODO: Document """
 
 
+def _read_settings(*, filepath='settings.json') -> dict:
+    """
+    Reads and validates settings.json file on the scripts path using _SETTINGS_KEY_VALIDATION
+    If the dictionary doesn't exist it calls _settings_wizard instead.
+
+    :param filepath: str, just for the sake of not overwriting our own files when testing.
+    :returns: dict, settings object
+    """
+    try:
+        with open(filepath, 'r', encoding='utf-8') as settings_file:
+            settings = json.load(settings_file)
+        settings_file.close()
+    except FileNotFoundError as e:
+        answer = _chose_option('There seems to not be any settings file. Do you want to set up one?'
+                               , ['Y', 'N'])
+        if answer == 'Y':
+            return _settings_wizard(filepath=filepath)
+        else:
+            _err(f'No {filepath} file.')
+    except json.decoder.JSONDecodeError as e:
+        _err('settings.json is malformed: %s\n Consider running the '
+             'settings_wizard by using -w option.' % e)
+
+    for key in _SETTINGS_KEY_VALIDATION:
+        if key not in settings.keys():
+            _err('settings.json file is missing key: %s\n Consider running the '
+                 'settings_wizard by using -w option.' % key)
+
+    return settings
+
+
+def _settings_wizard(*, filepath='settings.json') -> dict:
+    """
+    Asks the user for its Notion's api_key and database_id and creates a new settings.json in the
+    scripts path by using get_default_settings().
+
+    :param filepath: str, just for the sake of not overwriting our own files when testing.
+    :returns: dict, settings object
+    """
+    database_id = input('[>] Please enter the database_id of the Notion\'s budget database:')
+    api_key = input('[>] Please enter the Notion\'s API key associated with this database_id:')
+    settings = get_default_settings(database_id, api_key)
+    with open(filepath, 'w', encoding='utf-8') as settings_file:
+        json.dump(settings, settings_file, indent=True)
+    settings_file.close()
+    return settings
+
+
+def _chose_option(prompt: str, valid_options: List[str]) -> str:
+    """
+    Prompts the user via input() and forces it to chose an option from a list.
+    All strings in valid_options will be treated without case distinction.
+
+    :param prompt: str, message to print for the prompt
+    :param valid_options: List[str], valid options the user can chose
+    :return: str, option chosen
+    """
+    valid_options = [vo.upper() for vo in valid_options]
+    valid_response = False
+    while not valid_response:
+        response = input(f'[>] {prompt} {valid_options}')
+        if response.upper() in valid_options:
+            valid_response = response
+    return valid_response
+
+
+class GetTags(argparse.Action):
+    """ Creates a class for NBudgetController and calls get_tags() """
+    def __call__(self, parser, namespace, values, option_string):
+        NBC = NBudgetController(_read_settings())
+        NBC.get_tags()
+        parser.exit()
+
+
+class RunWizard(argparse.Action):
+    """ Calls _settings_wizard() """
+    def __call__(self, parser, namespace, values, option_string):
+        _settings_wizard()
+        parser.exit()
+
+
 if __name__ == '__main__':
-    # Terminal entry point
-
-    class ListTags(argparse.Action):
-        """ TODO: Document """
-        def __call__(self, parser, namespace, values, option_string):
-            parser.exit()
-
-
-    class RunWizard(argparse.Action):
-        """ TODO: Document """
-        def __call__(self, parser, namespace, values, option_string):
-            parser.exit()
-
-    def _read_settings(filepath: str = None) -> dict:
-        """ TODO: Document """
-
-    def __chose_option(prompt: str, options: List[str]) -> str:
-        """ TODO: Document """
-
-    def _settings_wizard():
-        """ TODO: Document """
-
+    # Terminal entry points
 
     _DESC = 'Interface for a simple budget database in Notion using Notion\'s API. The database ' \
             'needs to be structured as follows: Type(select), Date(date), Concept(title), ' \
-            'Amount(number), Tags(multi_select). The names of each column can be others,' \
-            'as long as the types are respected, you will have to edit the settings.json file so ' \
-            'the script knows their new names. '
+            'Amount(number), Tags(multi_select). The names of each column can be others ' \
+            '(as long as the types are respected), but you will have to edit the settings.json ' \
+            'file so the script knows their new names. '
 
     argument_parser = argparse.ArgumentParser(description=_DESC)
 
     w_help = 'Run the settings wizard and exit.'
     argument_parser.add_argument('-w', '--wizard', nargs=0, action=RunWizard, help=w_help)
     t_help = 'Output the current tag names in the database and exit.'
-    argument_parser.add_argument('-t', '--tags', nargs=0, action=ListTags, help=t_help)
+    argument_parser.add_argument('-t', '--tags', nargs=0, action=GetTags, help=t_help)
 
     i_help = 'Record is considered an income instead of an expense.'
     argument_parser.add_argument('-i', '--income', action='store_true', help=i_help)
