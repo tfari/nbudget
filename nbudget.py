@@ -66,6 +66,7 @@ import argparse
 import json
 import datetime
 import urllib.request
+from copy import deepcopy
 from urllib.error import HTTPError
 from http.client import HTTPResponse
 from typing import List
@@ -113,6 +114,13 @@ class NBudgetController:
     """
     Controller class for budget databases on Notion
     """
+    DATABASE_QUERY = 'https://api.notion.com/v1/databases/%s'
+    HEADERS = {
+        "User-Agent": "",  # Notion is using cloudflare to filter python-urllib's UA
+        "Content-Type": "application/json",
+        "Authorization": "Bearer %s",
+        "Notion-Version": "2021-05-13"
+    }
 
     def __init__(self, settings: dict = None, raises: bool = True):
         """
@@ -126,6 +134,11 @@ class NBudgetController:
         self.raises: bool = raises
         # Don't constantly re-get tags when we are using this iteratively
         self.tags_cache: List[str] = []
+
+        # Set up the API variables
+        self.database_query_url = NBudgetController.DATABASE_QUERY % self.settings['database_id']
+        self.headers = deepcopy(NBudgetController.HEADERS)
+        self.headers['Authorization'] = self.headers['Authorization'] % self.settings['api_key']
 
     def clear_tags_cache(self):
         """ Empty self.tags_cache """
@@ -174,7 +187,50 @@ class NBudgetController:
             return json.loads(response.read())
 
     def get_tags(self):
-        """ TODO: Document """
+        """ Get the tags from the Notion's database """
+        response = self._api_call(self.database_query_url, self.headers)
+        tags_name = self.settings['tags_name']  # Get tags column name
+
+        try:  # Get tag names out of the response
+            options = [o['name'] for o in response[
+                'properties'][tags_name]['multi_select']['options']]
+            
+        except KeyError as e:  # Parsing error
+            # Check what kind of key is missing
+            if e.args[0] == tags_name:  # Tags column name
+
+                # Detect if there is another column with multi_select type, multiple, or none
+                multi_selects = []
+                for key in response['properties']:
+                    if 'multi_select' in response['properties'][key].keys():
+                        multi_selects.append(key)
+
+                if len(multi_selects) == 1:
+                    self._wrap_error('APIParsingError: Column with name "%s" does not exist'
+                                     ' in the Notion database. Could it be "%s"? If it is then '
+                                     'change "tag_name" in the settings file for it.' %
+                                     (tags_name, multi_selects[0]), self.APIParsingError)
+                elif len(multi_selects) > 1:
+                    self._wrap_error('APIParsingError: Column with name "%s" does not exist'
+                                     ' in the Notion database. Could it be one of these: %s? If one'
+                                     ' is then change "tag_name" in the settings file for it.' %
+                                     (tags_name, ', '.join(multi_selects)),
+                                     self.APIParsingError)
+                else:
+                    self._wrap_error('APIParsingError: No multi_select type column found in'
+                                     ' Notion database.',
+                                     self.APIParsingError)
+
+            elif e.args[0] == 'multi_select':  # Wrong column type
+                wrong_type = [k for k in response['properties'][tags_name].keys()][0]
+                self._wrap_error('APIParsingError: Type of the %s column is: "%s". '
+                                 'Must be "multi_select"' % (tags_name, wrong_type),
+                                 self.APIParsingError)
+            else:
+                self._wrap_error('APIParsingError: Did not understand the API response: '
+                                 '%s' % response, self.APIParsingError)
+        else:
+            return options
 
     def insert_record(self, concept: str, amount: float, tags: list = None, income: str = 'OUT',
                       date: str = None):
@@ -223,14 +279,21 @@ class NBudgetController:
 
     class InvalidDateRange(Exception):
         """ The date is beyond range """
+
     class InvalidDate(Exception):
         """ The date the user inputted is invalid """
+
     class InvalidDateFormat(Exception):
         """ The date format in the settings file is invalid """
+
     class APIError(Exception):
         """ The API has returned an error """
+
     class HTTPError(Exception):
         """ urllib has returned an HTTP error """
+
+    class APIParsingError(Exception):
+        """ get_tags() returned a structure the script can't work with """
 
 
 def _read_settings(*, filepath='settings.json') -> dict:
@@ -301,13 +364,17 @@ def _chose_option(prompt: str, valid_options: List[str]) -> str:
 
 class GetTags(argparse.Action):
     """ Creates a class for NBudgetController and calls get_tags() """
+
     def __call__(self, parser, namespace, values, option_string):
-        NBudgetController(_read_settings(), raises=False).get_tags()
+        settings = _read_settings()
+        options = NBudgetController(settings, raises=False).get_tags()
+        print(settings['tag_separator'].join(options))
         parser.exit()
 
 
 class RunWizard(argparse.Action):
     """ Calls _settings_wizard() """
+
     def __call__(self, parser, namespace, values, option_string):
         _settings_wizard()
         parser.exit()
@@ -340,4 +407,5 @@ if __name__ == '__main__':
     tag_help = 'A tag or tags for the record. Must be valid tags, if unsure, run "nbudget.py -t"'
     argument_parser.add_argument('tags', metavar='TAG', type=str, nargs='*', help=tag_help)
 
-    parsed_arguments = argument_parser.parse_args(['-h'])
+    parsed_arguments = argument_parser.parse_args(['-t'])
+    print(parsed_arguments)

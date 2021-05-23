@@ -8,6 +8,7 @@ from urllib.error import HTTPError
 
 class Test(unittest.TestCase):
     """ Tests for the modules methods """
+
     def test_err(self):
         """ Test _err raises SystemExit """
         self.assertRaises(SystemExit, nbudget._err, 'Testing _err')
@@ -154,7 +155,7 @@ class Test(unittest.TestCase):
     def test_GetTags(self, mocked_method):
         """ Test GetTags.__call__() calls NBudget"""
         temp_save = nbudget._read_settings  # Save the actual content for tear down
-        nbudget._read_settings = mock.Mock
+        nbudget._read_settings = lambda : nbudget.get_default_settings('abc%s', 'bcd')
         nbudget.GetTags.__call__(None, mock.Mock(), None, None, None)
         mocked_method.assert_called()
         nbudget._read_settings = temp_save  # Cleaning up
@@ -168,9 +169,11 @@ class Test(unittest.TestCase):
 
 class TestNBudgetController(unittest.TestCase):
     """ Tests for the NBudgetController class """
+
     def setUp(self) -> None:
         """ Set up by creating an NBC """
-        self.NBC = nbudget.NBudgetController(None)
+        settings = nbudget.get_default_settings('MY_DB_ID', 'MY_API_KEY')
+        self.NBC = nbudget.NBudgetController(settings)
 
     def test_clear_tags_cache(self):
         """ Test self.NBC.tags_cache gets emptied. """
@@ -190,7 +193,7 @@ class TestNBudgetController(unittest.TestCase):
         self.NBC._wrap_error('', TypeError)
         mocked__err.assert_called()
 
-    @mock.patch('urllib.request.urlopen',  create=True)
+    @mock.patch('urllib.request.urlopen', create=True)
     def test_api_call_right(self, mocked_urlopen):
         """ Test that _api_call calls urlopen() and returns parsed json """
         second_mock = mock.Mock()
@@ -199,31 +202,83 @@ class TestNBudgetController(unittest.TestCase):
         mocked_urlopen.return_value = second_mock
         self.assertEqual(expected, self.NBC._api_call('http://google.com', {}, b''))
 
-    @mock.patch('urllib.request.urlopen',  create=True)
+    @mock.patch('urllib.request.urlopen', create=True)
     def test_api_call_raises_APIError(self, mocked_urlopen):
         """ Test that _api_call raises APIError when an HTTPError returns a json string"""
         second_mock: mock.Mock = mock.Mock()
         expected = {'code': '', 'message': ''}
         second_mock.read.return_value = str(expected).replace("'", '"')
-        mocked_urlopen.side_effect = HTTPError('', '', '' ,'', second_mock)
+        mocked_urlopen.side_effect = HTTPError('', 0, '', '', second_mock)
         self.assertRaises(self.NBC.APIError, self.NBC._api_call, 'http://google.com', {}, b'')
 
-    @mock.patch('urllib.request.urlopen',  create=True)
+    @mock.patch('urllib.request.urlopen', create=True)
     def test_api_call_raises_HTTPError(self, mocked_urlopen):
         """ Test that _api_call raises HTTPError when an HTTPError does not return a json string """
         # First try 403, as we have separated it
         second_mock: mock.Mock = mock.Mock()
         second_mock.code.return_value = 403
         second_mock.read.return_value = 'error'
-        mocked_urlopen.side_effect = HTTPError('', '', '' ,'', second_mock)
+        mocked_urlopen.side_effect = HTTPError('', 0, '', '', second_mock)
         self.assertRaises(self.NBC.HTTPError, self.NBC._api_call, 'http://google.com', {}, b'')
 
         # Then try not 403
         second_mock: mock.Mock = mock.Mock()
         second_mock.code.return_value = 503
         second_mock.read.return_value = 'error'
-        mocked_urlopen.side_effect = HTTPError('', '', '' ,'', second_mock)
+        mocked_urlopen.side_effect = HTTPError('', '', '', '', second_mock)
         self.assertRaises(self.NBC.HTTPError, self.NBC._api_call, 'http://google.com', {}, b'')
+
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_get_tags_right(self, mocked_api_call):
+        """ Tests get_tags calls _api_call with the right arguments, and returns the options."""
+        expected = ['a', 'b']
+        return_value = {'properties': {'Tags': {'multi_select': {'options': [{'name': 'a'},
+                                                                             {'name': 'b'}]}}}}
+        mocked_api_call.side_effect = [return_value]
+        self.assertEqual(expected, self.NBC.get_tags())
+
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_get_tags_different_tags_name(self, mocked_api_call):
+        """ Tests get_tags works right when tags_name has changed in settings """
+        self.NBC.settings['tags_name'] = 'Changed Tag Name'
+        expected = ['a', 'b']
+        return_value = {'properties': {
+            'Changed Tag Name': {'multi_select': {'options': [{'name': 'a'}, {'name': 'b'}]}}}}
+        mocked_api_call.side_effect = [return_value]
+        self.assertEqual(expected, self.NBC.get_tags())
+
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_get_tags_not_expected_structure_raises_APIParsingError(self, mocked_api_call):
+        """ Test get_tags() return APIParsingError when it cannot parse the response """
+        # Wrong tag column name, one other option
+        return_value = {'properties': {
+            'Other name': {'multi_select': {'options': [{'name': 'a'}, {'name': 'b'}]}}}}
+        mocked_api_call.side_effect = [return_value]
+        self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
+
+        # Wrong tag column name, several other options
+        return_value = {'properties': {
+            'Other name': {'multi_select': {'options': [{'name': 'a'}, {'name': 'b'}]}},
+            'Another name': {'multi_select': {'options': [{'name': 'a'}, {'name': 'b'}]}}}}
+        mocked_api_call.side_effect = [return_value]
+        self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
+
+        # Wrong tag column name, no options
+        return_value = {'properties': {
+            'Other name': {'select': {'options': [{'name': 'a'}, {'name': 'b'}]}}}}
+        mocked_api_call.side_effect = [return_value]
+        self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
+
+        # Wrong tag column type
+        return_value = {'properties': {'Tags': {'select': {'options': [{'name': 'a'},
+                                                                       {'name': 'b'}]}}}}
+        mocked_api_call.side_effect = [return_value]
+        self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
+
+        # Wrong structure all together
+        return_value = {'abd': {'ee': {'ff': {'ag32': [{'name': 'a'}, {'name': 'b'}]}}}}
+        mocked_api_call.side_effect = [return_value]
+        self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
 
     def test__format_date_right(self):
         """ Test that _format_date works right. """
@@ -257,6 +312,7 @@ class TestNBudgetController(unittest.TestCase):
         self.assertRaises(self.NBC.InvalidDateRange, self.NBC._format_date, '30/20/2020', 'D/M/Y')
         self.assertRaises(self.NBC.InvalidDateRange, self.NBC._format_date, '30/20/1000000000',
                           'D/M/Y')
+
 
 if __name__ == '__main__':
     unittest.main()
