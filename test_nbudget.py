@@ -3,6 +3,7 @@ import json
 import nbudget
 import unittest
 from unittest import mock
+from urllib.error import HTTPError
 
 
 class Test(unittest.TestCase):
@@ -171,6 +172,12 @@ class TestNBudgetController(unittest.TestCase):
         """ Set up by creating an NBC """
         self.NBC = nbudget.NBudgetController(None)
 
+    def test_clear_tags_cache(self):
+        """ Test self.NBC.tags_cache gets emptied. """
+        self.NBC.tags_cache = [1, 2, 3, 4, 5, 6]
+        self.NBC.clear_tags_cache()
+        self.assertEqual([], self.NBC.tags_cache)
+
     def test__wrap_error_raises_on(self):
         """ Tests that _wrap_error raises Exception passed in when self.raises is True """
         self.NBC.raises = True
@@ -182,6 +189,41 @@ class TestNBudgetController(unittest.TestCase):
         self.NBC.raises = False
         self.NBC._wrap_error('', TypeError)
         mocked__err.assert_called()
+
+    @mock.patch('urllib.request.urlopen',  create=True)
+    def test_api_call_right(self, mocked_urlopen):
+        """ Test that _api_call calls urlopen() and returns parsed json """
+        second_mock = mock.Mock()
+        expected = {'a': 1}
+        second_mock.read.return_value = str(expected).replace("'", '"')
+        mocked_urlopen.return_value = second_mock
+        self.assertEqual(expected, self.NBC._api_call('http://google.com', {}, b''))
+
+    @mock.patch('urllib.request.urlopen',  create=True)
+    def test_api_call_raises_APIError(self, mocked_urlopen):
+        """ Test that _api_call raises APIError when an HTTPError returns a json string"""
+        second_mock: mock.Mock = mock.Mock()
+        expected = {'code': '', 'message': ''}
+        second_mock.read.return_value = str(expected).replace("'", '"')
+        mocked_urlopen.side_effect = HTTPError('', '', '' ,'', second_mock)
+        self.assertRaises(self.NBC.APIError, self.NBC._api_call, 'http://google.com', {}, b'')
+
+    @mock.patch('urllib.request.urlopen',  create=True)
+    def test_api_call_raises_HTTPError(self, mocked_urlopen):
+        """ Test that _api_call raises HTTPError when an HTTPError does not return a json string """
+        # First try 403, as we have separated it
+        second_mock: mock.Mock = mock.Mock()
+        second_mock.code.return_value = 403
+        second_mock.read.return_value = 'error'
+        mocked_urlopen.side_effect = HTTPError('', '', '' ,'', second_mock)
+        self.assertRaises(self.NBC.HTTPError, self.NBC._api_call, 'http://google.com', {}, b'')
+
+        # Then try not 403
+        second_mock: mock.Mock = mock.Mock()
+        second_mock.code.return_value = 503
+        second_mock.read.return_value = 'error'
+        mocked_urlopen.side_effect = HTTPError('', '', '' ,'', second_mock)
+        self.assertRaises(self.NBC.HTTPError, self.NBC._api_call, 'http://google.com', {}, b'')
 
     def test__format_date_right(self):
         """ Test that _format_date works right. """

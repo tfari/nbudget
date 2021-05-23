@@ -38,9 +38,11 @@ create a new one by running the script with -w.
 When using this script as an imported library, the user can get a default settings dict by using
 .get_default_settings(database_id, api_key) and passing along the corresponding values
 (This will not alter any existing settings.json file). Then he can pass the return dictionary of
-this function to create an instance of NBudgetController, through which he can access the
-following methods:
-
+this function to create an instance of NBudgetController, through which the following methods are
+exposed:
+    * clear_tags_cache() -> We need the tags names for validating insert_record(), but we don't want
+    to get the tags every time if we are inserting records iteratively, so we instead save a cache
+    of them the first time. This methods allows for emptying this cache so we get the tags again.
     * get_tags()
     * insert_record(concept: str, amount: float, tags: list = None, income: str = 'OUT',
                     date: str = None)
@@ -108,7 +110,9 @@ def get_default_settings(database_id: str, api_key: str) -> dict:
 
 
 class NBudgetController:
-    """ Controller class for budget databases on Notion """
+    """
+    Controller class for budget databases on Notion
+    """
 
     def __init__(self, settings: dict = None, raises: bool = True):
         """
@@ -118,8 +122,14 @@ class NBudgetController:
         into the terminal, when the script is being ran as a module, we want to raise our errors
         instead. By default we raise.
         """
-        self.settings = settings
-        self.raises = raises
+        self.settings: dict = settings
+        self.raises: bool = raises
+        # Don't constantly re-get tags when we are using this iteratively
+        self.tags_cache: List[str] = []
+
+    def clear_tags_cache(self):
+        """ Empty self.tags_cache """
+        self.tags_cache = []
 
     def _wrap_error(self, error_msg: str, e):
         """
@@ -133,11 +143,35 @@ class NBudgetController:
         else:
             _err(error_msg)
 
-    def _api_call(self, data=None):
-        """ TODO: Document """
+    def _api_call(self, url, headers, data=None) -> dict:
+        """
+        Performs an HTTP call to the API.
 
-    def _query_tags(self):
-        """ TODO: Document """
+        :param url: str, url to call
+        :param headers: dict, headers to use
+        :param data: bytes-encoded string, data for the request, if any.
+        :return: dict, json response from the API
+        :raises APIError, if the request went right but the API returned an error
+        :raises HTTPError, if the request went wrong
+        """
+        r = urllib.request.Request(url, headers=headers, data=data)
+        try:
+            response: HTTPResponse = urllib.request.urlopen(r)
+        except HTTPError as e:
+            try:
+                # Check if the error is from the API or HTTP by attempting to JSON the response
+                err_json = json.loads(e.read())
+                # TODO: self._parse_api_error() -> Give better feedback?
+                self._wrap_error('Api Error: %s -> %s' % (err_json['code'], err_json['message']),
+                                 self.APIError)
+            except json.decoder.JSONDecodeError:
+                if e.code == 403:  # This can happen if the UA is using python-urllib
+                    self._wrap_error('HTTP Error: %s -> Check what you are sending if you have '
+                                     'modified the script' % e.code, self.HTTPError)
+                else:
+                    self._wrap_error('HTTP Error: %s' % e.code, self.HTTPError)
+        else:
+            return json.loads(response.read())
 
     def get_tags(self):
         """ TODO: Document """
@@ -191,9 +225,12 @@ class NBudgetController:
         """ The date is beyond range """
     class InvalidDate(Exception):
         """ The date the user inputted is invalid """
-
     class InvalidDateFormat(Exception):
         """ The date format in the settings file is invalid """
+    class APIError(Exception):
+        """ The API has returned an error """
+    class HTTPError(Exception):
+        """ urllib has returned an HTTP error """
 
 
 def _read_settings(*, filepath='settings.json') -> dict:
@@ -303,4 +340,4 @@ if __name__ == '__main__':
     tag_help = 'A tag or tags for the record. Must be valid tags, if unsure, run "nbudget.py -t"'
     argument_parser.add_argument('tags', metavar='TAG', type=str, nargs='*', help=tag_help)
 
-    x = argument_parser.parse_args(['-h'])
+    parsed_arguments = argument_parser.parse_args(['-h'])
