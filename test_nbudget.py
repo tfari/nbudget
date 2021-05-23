@@ -2,6 +2,7 @@ import os
 import json
 import nbudget
 import unittest
+import datetime
 from unittest import mock
 from urllib.error import HTTPError
 
@@ -296,6 +297,79 @@ class TestNBudgetController(unittest.TestCase):
         return_value = {'abd': {'ee': {'ff': {'ag32': [{'name': 'a'}, {'name': 'b'}]}}}}
         mocked_api_call.side_effect = [return_value]
         self.assertRaises(self.NBC.APIParsingError, self.NBC.get_tags)
+
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_insert_record_right(self, mocked_api_call):
+        """ Test inserts works right """
+        self.NBC.tags_cache = ['Tag1']
+
+        expected = b'{"parent": {"database_id": "MY_DB_ID"}, ' \
+                   b'"properties": {"Type": {"select": {"name": "EXPENSE"}}, "Date": {"date": ' \
+                   b'{"start": "2019-01-12"}}, "Concept": {"title": [{"text": {"content": "My ' \
+                   b'Concept"}}]}, "Amount": {"number": -1200.0}, "Tags": {"multi_select": [{' \
+                   b'"name": "Tag1"}]}}}'
+
+        self.NBC.insert_record('My Concept', 1200.0, ["Tag1"], False, '12/1/2019')
+        mocked_api_call.assert_called_with(self.NBC.page_insertion_query, self.NBC.headers,
+                                           expected)
+
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_insert_record_right_no_date(self, mocked_api_call):
+        """ Test inserts works right without a date"""
+        self.NBC.tags_cache = ['Tag1']
+        today = datetime.datetime.today()
+        date = datetime.date(today.year, today.month, today.day).isoformat()
+
+        expected = b'{"parent": {"database_id": "MY_DB_ID"}, ' \
+                   b'"properties": {"Type": {"select": {"name": "EXPENSE"}}, "Date": {"date": ' \
+                   b'{"start": "%s"}}, "Concept": {"title": [{"text": {"content": "My ' \
+                   b'Concept"}}]}, "Amount": {"number": -1200.0}}}' % date.encode()
+
+        self.NBC.insert_record('My Concept', 1200.0, [], False)
+        mocked_api_call.assert_called_with(self.NBC.page_insertion_query, self.NBC.headers,
+                                           expected)
+
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_insert_record_right_using_True_income_flag(self, mocked_api_call):
+        """ Test inserts works right when using a True income flag. (Amount is positive and Type is
+        "INCOME" """
+        self.NBC.tags_cache = ['Tag1']
+
+        expected = b'{"parent": {"database_id": "MY_DB_ID"}, ' \
+                   b'"properties": {"Type": {"select": {"name": "INCOME"}}, "Date": {"date": ' \
+                   b'{"start": "2019-01-12"}}, "Concept": {"title": [{"text": {"content": "My ' \
+                   b'Concept"}}]}, "Amount": {"number": 1200.0}}}'
+
+        self.NBC.insert_record('My Concept', 1200.0, [], True, '12/1/2019')
+        mocked_api_call.assert_called_with(self.NBC.page_insertion_query, self.NBC.headers,
+                                           expected)
+
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_insert_record_right_using_different_name_settings(self, mocked_api_call):
+        """ Test inserts work right when we use other name settings"""
+        self.NBC.tags_cache = ['Tag1']
+        self.NBC.settings['type_name'] = 'New Type Name'
+        self.NBC.settings['date_name'] = "New Date Name"
+        self.NBC.settings['concept_name'] = "New Concept Name"
+        self.NBC.settings['amount_name'] = "New Amount Name"
+        self.NBC.settings['tags_name'] = "New Tags Name"
+
+        expected = b'{"parent": {"database_id": "MY_DB_ID"}, ' \
+                   b'"properties": {"New Type Name": {"select": {"name": "INCOME"}}, ' \
+                   b'"New Date Name": {"date": {"start": "2019-01-12"}}, ' \
+                   b'"New Concept Name": {"title": [{"text": {"content": "My Concept"}}]}, ' \
+                   b'"New Amount Name": {"number": 1200.0}, "New Tags Name": {"multi_select": [{' \
+                   b'"name": "Tag1"}]}}}'
+
+        self.NBC.insert_record('My Concept', 1200.0, ["Tag1"], True, '12/1/2019')
+        mocked_api_call.assert_called_with(self.NBC.page_insertion_query, self.NBC.headers,
+                                           expected)
+
+    def test_insert_record_raises_InvalidTag_when_using_Invalid_Tag_name(self):
+        """ Test inserts works right when using an Invalid Tag name"""
+        self.NBC.tags_cache = ['Tag1']
+        self.assertRaises(self.NBC.InvalidTag, self.NBC.insert_record, 'My Concept', 1200.0,
+                          ["Tag2"], False, '12/1/2019')
 
     def test__format_date_right(self):
         """ Test that _format_date works right. """

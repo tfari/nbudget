@@ -115,6 +115,7 @@ class NBudgetController:
     Controller class for budget databases on Notion
     """
     DATABASE_QUERY = 'https://api.notion.com/v1/databases/%s'
+    PAGE_INSERTION_QUERY = 'https://api.notion.com/v1/pages'
     HEADERS = {
         "User-Agent": "",  # Notion is using cloudflare to filter python-urllib's UA
         "Content-Type": "application/json",
@@ -136,6 +137,7 @@ class NBudgetController:
         self.tags_cache: List[str] = []
 
         # Set up the API variables
+        self.page_insertion_query = NBudgetController.PAGE_INSERTION_QUERY
         self.database_query_url = NBudgetController.DATABASE_QUERY % self.settings['database_id']
         self.headers = deepcopy(NBudgetController.HEADERS)
         self.headers['Authorization'] = self.headers['Authorization'] % self.settings['api_key']
@@ -186,15 +188,21 @@ class NBudgetController:
         else:
             return json.loads(response.read())
 
-    def get_tags(self):
-        """ Get the tags from the Notion's database """
+    def get_tags(self) -> List[str]:
+        """
+        Get the tags from the Notion's database.
+        Fills self.tags_cache and returns them.
+
+        :return: List[str], Tag names
+        :raises APIParsingError: if there were errors when attempting to parse the API response
+        """
         response = self._api_call(self.database_query_url, self.headers)
         tags_name = self.settings['tags_name']  # Get tags column name
 
         try:  # Get tag names out of the response
             options = [o['name'] for o in response[
                 'properties'][tags_name]['multi_select']['options']]
-            
+
         except KeyError as e:  # Parsing error
             # Check what kind of key is missing
             if e.args[0] == tags_name:  # Tags column name
@@ -230,19 +238,81 @@ class NBudgetController:
                 self._wrap_error('APIParsingError: Did not understand the API response: '
                                  '%s' % response, self.APIParsingError)
         else:
+            self.tags_cache = options
             return options
 
-    def insert_record(self, concept: str, amount: float, tags: list = None, income: str = 'OUT',
-                      date: str = None):
+    def insert_record(self, concept: str, amount: float, tags: List[str] = None,
+                      income: bool = False, date: str = None) -> None:
         """
-        TODO: Document
-        :param concept:
-        :param amount:
-        :param tags:
-        :param income:
-        :param date:
-        :return:
+        Transforms the arguments into valid page insertion data for the API and calls it.
+        It calls self.get_tags() if self.tags_cache is empty in order to be able to validate the
+        tags the user is attempting to pass into the database.
+
+        :param concept: str, the record's concept
+        :param amount: float, the record's amount
+        :param tags: List[str], the record's tags. Empty by default.
+        :param income: bool, if the record is an INCOME type. False by default.
+        :param date: str, the record's date. None by default, which will use today's date.
+        :return: None
+        :raises InvalidTag: If the user attempted to use a tag that did not exist in Notion's db
+        :raises APIError, if thr request went right but the API returned an error
+        :raises HTTPError, if the request went wrong
+
+        Lets the following exceptions escalate:
+
+        From self._format_date()
+        :raises InvalidDateFormat: If there is a missing key (D, M, Y) in date_input_format
+        :raises InvalidDate: If there is a missing value in date
+        :raises InvalidDateRange: If either day, month, or year is beyond range
+
+        From self.get_tags()
+        :raises APIError, if a request went right but the API returned an error
+        :raises HTTPError, if a request went wrong
+        :raises APIParsingError: if there were errors when attempting to parse the Tags API response
         """
+        # Date parsing
+        if date is None:
+            # We don't want to clutter the database with time information
+            today = datetime.datetime.today()
+            date = datetime.date(today.year, today.month, today.day)
+        else:
+            date = self._format_date(date, self.settings['date_input_format'])
+        date = date.isoformat()  # Notion uses ISO 8601 Format
+
+        # Income parsing
+        record_type = 'EXPENSE' if not income else 'INCOME'
+        amount = -amount if not income else amount
+
+        # First build
+        data = {"parent": {"database_id": self.settings['database_id']},
+                "properties": {self.settings['type_name']: {"select": {"name": record_type}},
+                               self.settings['date_name']: {"date": {"start": date}},
+                               self.settings['concept_name']: {
+                                   "title": [{"text": {"content": concept}}]},
+                               self.settings['amount_name']: {"number": amount}
+                               }
+                }
+
+        # Validate tags
+        if tags:
+            # Make a call to the API to get the Tag names if the tags_cache is empty
+            valid_options = self.tags_cache if self.tags_cache else self.get_tags()
+
+            # Validate tags against the one's gotten from Notion
+            for t in tags:
+                if t not in valid_options:
+                    self._wrap_error('InvalidTag: Tag does not exist in Notion db: %s, use one of '
+                                     'these: %s' % (t, ", ".join(valid_options)), self.InvalidTag)
+
+            # Create the json objects and append them to the first build
+            tags = [{"name": t} for t in tags]
+            data['properties'][self.settings['tags_name']] = {"multi_select": tags}
+
+        # Encode data for urllib
+        data = str(data).replace("'", '"').encode()
+
+        # Do API call
+        self._api_call(self.page_insertion_query, self.headers, data)
 
     def _format_date(self, date: str, date_input_format: str) -> datetime.date:
         """
@@ -294,6 +364,9 @@ class NBudgetController:
 
     class APIParsingError(Exception):
         """ get_tags() returned a structure the script can't work with """
+
+    class InvalidTag(Exception):
+        """ Attempted to insert a Tag that didn't exist in Notion's db as an option """
 
 
 def _read_settings(*, filepath='settings.json') -> dict:
@@ -407,5 +480,8 @@ if __name__ == '__main__':
     tag_help = 'A tag or tags for the record. Must be valid tags, if unsure, run "nbudget.py -t"'
     argument_parser.add_argument('tags', metavar='TAG', type=str, nargs='*', help=tag_help)
 
-    parsed_arguments = argument_parser.parse_args(['-t'])
-    print(parsed_arguments)
+    parsed_arguments = argument_parser.parse_args(['-d', '12/1/2019', 'My Concept', '1200'])
+    # parsed_arguments = argument_parser.parse_args()
+    NBC = NBudgetController(_read_settings(), raises=False)
+    NBC.insert_record(parsed_arguments.concept[0], parsed_arguments.amount[0],
+                      parsed_arguments.tags, parsed_arguments.income, parsed_arguments.date[0])
