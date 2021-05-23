@@ -114,9 +114,9 @@ class NBudgetController:
     """
     Controller class for budget databases on Notion
     """
-    DATABASE_QUERY = 'https://api.notion.com/v1/databases/%s'
-    PAGE_INSERTION_QUERY = 'https://api.notion.com/v1/pages'
-    HEADERS = {
+    _DATABASE_QUERY = 'https://api.notion.com/v1/databases/%s'
+    _PAGE_INSERTION_QUERY = 'https://api.notion.com/v1/pages'
+    _HEADERS = {
         "User-Agent": "",  # Notion is using cloudflare to filter python-urllib's UA
         "Content-Type": "application/json",
         "Authorization": "Bearer %s",
@@ -125,8 +125,9 @@ class NBudgetController:
 
     def __init__(self, settings: dict = None, raises: bool = True):
         """
-        TODO: Document
-        :param settings:
+        Controller class for budget databases on Notion.
+
+        :param settings: dict, settings file
         :param raises: bool, When we run the script via terminal we want the errors to be printed
         into the terminal, when the script is being ran as a module, we want to raise our errors
         instead. By default we raise.
@@ -137,12 +138,12 @@ class NBudgetController:
         self.tags_cache: List[str] = []
 
         # Set up the API variables
-        self.page_insertion_query = NBudgetController.PAGE_INSERTION_QUERY
-        self.database_query_url = NBudgetController.DATABASE_QUERY % self.settings['database_id']
-        self.headers = deepcopy(NBudgetController.HEADERS)
+        self.page_insertion_query = NBudgetController._PAGE_INSERTION_QUERY
+        self.database_query_url = NBudgetController._DATABASE_QUERY % self.settings['database_id']
+        self.headers = deepcopy(NBudgetController._HEADERS)
         self.headers['Authorization'] = self.headers['Authorization'] % self.settings['api_key']
 
-    def clear_tags_cache(self):
+    def clear_tags_cache(self) -> None:
         """ Empty self.tags_cache """
         self.tags_cache = []
 
@@ -381,7 +382,7 @@ def _read_settings(*, filepath='settings.json') -> dict:
         with open(filepath, 'r', encoding='utf-8') as settings_file:
             settings = json.load(settings_file)
         settings_file.close()
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         answer = _chose_option('There seems to not be any settings file. Do you want to set up one?'
                                , ['Y', 'N'])
         if answer == 'Y':
@@ -481,6 +482,8 @@ if __name__ == '__main__':
     argument_parser.add_argument('tags', metavar='TAG', type=str, nargs='*', help=tag_help)
 
     parsed_arguments = argument_parser.parse_args()
+    print(parsed_arguments)
     NBC = NBudgetController(_read_settings(), raises=False)
     NBC.insert_record(parsed_arguments.concept[0], parsed_arguments.amount[0],
-                      parsed_arguments.tags, parsed_arguments.income, parsed_arguments.date[0])
+                      parsed_arguments.tags, parsed_arguments.income, parsed_arguments.date[0]
+                      if parsed_arguments.date else None)
