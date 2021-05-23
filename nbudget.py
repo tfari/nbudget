@@ -480,8 +480,7 @@ if __name__ == '__main__':
     tag_help = 'A tag or tags for the record. Must be valid tags, if unsure, run "nbudget.py -t"'
     argument_parser.add_argument('tags', metavar='TAG', type=str, nargs='*', help=tag_help)
 
-    parsed_arguments = argument_parser.parse_args(['-d', '12/1/2019', 'My Concept', '1200'])
-    # parsed_arguments = argument_parser.parse_args()
+    parsed_arguments = argument_parser.parse_args()
     NBC = NBudgetController(_read_settings(), raises=False)
     NBC.insert_record(parsed_arguments.concept[0], parsed_arguments.amount[0],
                       parsed_arguments.tags, parsed_arguments.income, parsed_arguments.date[0])
