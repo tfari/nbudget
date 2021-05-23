@@ -61,6 +61,7 @@ The settings.json file is structured as follows:
         'tags_name': 'Tags'           - Name of the Tags column in the Notion's database
 
 """
+import os
 import sys
 import argparse
 import json
@@ -70,6 +71,8 @@ from copy import deepcopy
 from urllib.error import HTTPError
 from http.client import HTTPResponse
 from typing import List
+
+_PATH = os.path.dirname(os.path.abspath(__file__))
 
 _SETTINGS_KEY_VALIDATION = ['database_id', 'api_key', 'date_input_format', 'tag_separator',
                             'type_name', 'date_name', 'concept_name', 'amount_name', 'tags_name']
@@ -379,7 +382,7 @@ def _read_settings(*, filepath='settings.json') -> dict:
     :returns: dict, settings object
     """
     try:
-        with open(filepath, 'r', encoding='utf-8') as settings_file:
+        with open(_PATH + '/' + filepath, 'r', encoding='utf-8') as settings_file:
             settings = json.load(settings_file)
         settings_file.close()
     except FileNotFoundError:
@@ -412,7 +415,7 @@ def _settings_wizard(*, filepath='settings.json') -> dict:
     database_id = input('[>] Please enter the database_id of the Notion\'s budget database:')
     api_key = input('[>] Please enter the Notion\'s API key associated with this database_id:')
     settings = get_default_settings(database_id, api_key)
-    with open(filepath, 'w', encoding='utf-8') as settings_file:
+    with open(_PATH + '/' + filepath, 'w', encoding='utf-8') as settings_file:
         json.dump(settings, settings_file, indent=True)
     settings_file.close()
     return settings

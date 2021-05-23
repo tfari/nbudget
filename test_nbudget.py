@@ -49,7 +49,7 @@ class Test(unittest.TestCase):
             'amount_name': 'Amount',
             'tags_name': 'Tags'
         }
-        with open(test_file_path, 'w', encoding='utf-8') as test_file:
+        with open(nbudget._PATH + '/' + test_file_path, 'w', encoding='utf-8') as test_file:
             json.dump(expected, test_file, indent=True)
         test_file.close()
         self.assertEqual(expected, nbudget._read_settings(filepath=test_file_path))
@@ -59,7 +59,7 @@ class Test(unittest.TestCase):
         """ Test that _read_settings raises SystemExit if its lacking a KEY."""
         test_file_path = 'test_settings.json'  # We don't want to overwrite our own settings
         invalid_settings = {'database_id': 'MY_DATABASE_ID'}
-        with open(test_file_path, 'w', encoding='utf-8') as test_file:
+        with open(nbudget._PATH + '/' + test_file_path, 'w', encoding='utf-8') as test_file:
             json.dump(invalid_settings, test_file, indent=True)
         test_file.close()
         self.assertRaises(SystemExit, nbudget._read_settings, filepath=test_file_path)
@@ -69,7 +69,7 @@ class Test(unittest.TestCase):
         """ Test that _read_settings exits if settings.json file is malformed."""
         test_file_path = 'test_settings.json'  # We don't want to overwrite our own settings
         malformed_settings = '{"database_id": "malformed'
-        with open(test_file_path, 'w', encoding='utf-8') as test_file:
+        with open(nbudget._PATH + '/' + test_file_path, 'w', encoding='utf-8') as test_file:
             test_file.write(malformed_settings)
         test_file.close()
         self.assertRaises(SystemExit, nbudget._read_settings, filepath=test_file_path)
@@ -138,7 +138,7 @@ class Test(unittest.TestCase):
         }
         mocked_input.side_effect = ['MY_DB_ID', 'MY_API_KEY']
         nbudget._settings_wizard(filepath=test_file_path)
-        with open(test_file_path, 'r', encoding='utf-8') as test_file:
+        with open(nbudget._PATH + '/' + test_file_path, 'r', encoding='utf-8') as test_file:
             actual = json.load(test_file)
         test_file.close()
         self.assertEqual(expected, actual)
