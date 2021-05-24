@@ -51,7 +51,7 @@ class Test(unittest.TestCase):
             'amount_name': 'Amount',
             'tags_name': 'Tags'
         }
-        with open(nbudget._PATH + '/' + test_file_path, 'w', encoding='utf-8') as test_file:
+        with open(f'{nbudget._PATH}/{test_file_path}', 'w', encoding='utf-8') as test_file:
             json.dump(expected, test_file, indent=True)
         test_file.close()
         self.assertEqual(expected, nbudget._read_settings(filepath=test_file_path))
@@ -61,7 +61,7 @@ class Test(unittest.TestCase):
         """ Test that _read_settings raises SystemExit if its lacking a KEY."""
         test_file_path = 'test_settings.json'  # We don't want to overwrite our own settings
         invalid_settings = {'database_id': 'MY_DATABASE_ID'}
-        with open(nbudget._PATH + '/' + test_file_path, 'w', encoding='utf-8') as test_file:
+        with open(f'{nbudget._PATH}/{test_file_path}', 'w', encoding='utf-8') as test_file:
             json.dump(invalid_settings, test_file, indent=True)
         test_file.close()
         self.assertRaises(SystemExit, nbudget._read_settings, filepath=test_file_path)
@@ -71,7 +71,7 @@ class Test(unittest.TestCase):
         """ Test that _read_settings exits if settings.json file is malformed."""
         test_file_path = 'test_settings.json'  # We don't want to overwrite our own settings
         malformed_settings = '{"database_id": "malformed'
-        with open(nbudget._PATH + '/' + test_file_path, 'w', encoding='utf-8') as test_file:
+        with open(f'{nbudget._PATH}/{test_file_path}', 'w', encoding='utf-8') as test_file:
             test_file.write(malformed_settings)
         test_file.close()
         self.assertRaises(SystemExit, nbudget._read_settings, filepath=test_file_path)
@@ -140,7 +140,7 @@ class Test(unittest.TestCase):
         }
         mocked_input.side_effect = ['MY_DB_ID', 'MY_API_KEY']
         nbudget._settings_wizard(filepath=test_file_path)
-        with open(nbudget._PATH + '/' + test_file_path, 'r', encoding='utf-8') as test_file:
+        with open(f'{nbudget._PATH}/{test_file_path}', 'r', encoding='utf-8') as test_file:
             actual = json.load(test_file)
         test_file.close()
         self.assertEqual(expected, actual)
@@ -152,7 +152,7 @@ class Test(unittest.TestCase):
         to input, and that it doesn't care about case. """
         expected = 'NoCaSe'
         mocked_input.side_effect = ['Invalid', 'Invalid', expected]
-        self.assertEqual(expected, nbudget._chose_option('', ['NOCASE', 'OTHER']))
+        self.assertEqual(expected, nbudget._choose_option('', ['NOCASE', 'OTHER']))
 
     @mock.patch('nbudget.NBudgetController.get_tags', create=True)
     def test_GetTags(self, mocked_method):
@@ -202,7 +202,7 @@ class TestNBudgetController(unittest.TestCase):
         expected = {'a': 1}
         second_mock.read.return_value = str(expected).replace("'", '"')
         mocked_urlopen.return_value = second_mock
-        self.assertEqual(expected, self.NBudgetController._api_call('http://google.com', {}, b''))
+        self.assertEqual(expected, self.NBudgetController._api_call('http://example.org', {}, b''))
 
     @mock.patch('urllib.request.urlopen', create=True)
     def test_api_call_raises_APIError(self, mocked_urlopen):

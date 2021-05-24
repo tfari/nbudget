@@ -1,5 +1,5 @@
-# nbudget
-CLI frontend for budget database via [Notion API]("https://developers.notion.com/"). 
+# 💸 nbudget
+CLI frontend for a budget database in Notion, via [Notion API]("https://developers.notion.com/").
 
 Allows user to insert records into a simple budget database.
 
@@ -67,42 +67,41 @@ The settings.json file specifies the following possible setting configurations:
 The module provides the following public interfaces:
 
 ```
-get_default_settings(database_id: str, api_key: str) -> dict:
+def get_default_settings(database_id: str, api_key: str) -> Dict[str, str]:
     """
     :param database_id: str, A valid Notion's database id accessible via the api_key.
     :param api_key: str, A valid Notion's api_key that has access to the database under database_id.
-    :returns: dict, A default settings dictionary with the users information.
+    :returns: Dict[str, str], A default settings dictionary with the users information.
     :raises TypeError: if database_id or api_key are not string objects.
     """
 ```
 ```
-class NBudgetController(self, settings: dict = None, raises: bool = True):
-    """
-    Controller class for budget databases on Notion.
-    
-    :param settings: dict, settings file
-    :param raises: bool, When we run the script via terminal we want the errors to be printed
-    into the terminal, when the script is being ran as a module, we want to raise our errors
-    instead. By default we raise.
-    """
-    
+    class NBudgetController(self, settings: Dict[str, str], raises: bool = True):
+        """
+        Controller class for budget databases on Notion.
+
+        :param settings: Dict[str, str], settings file
+        :param raises: bool, When we run the script via terminal we want the errors to be printed
+        into the terminal, when the script is being ran as a module, we want to raise our errors
+        instead. By default we raise.
+        """
+        
         def clear_tags_cache(self) -> None:
             """ Empty self.tags_cache """
-        
+    
         def get_tags(self) -> List[str]:
-            """ 
-            Get the tags from the Notion's database.
-            Fills self.tags_cache and returns them.
-
+            """
+            Get the tags from the Notion's database. Fills self.tags_cache and returns them.
+    
             :return: List[str], Tag names
             :raises APIParsingError: if there were errors when attempting to parse the API response
             """
-        
-        
+            
         def insert_record(self, concept: str, amount: float, tags: List[str] = None,
-                      income: bool = False, date: str = None) -> None:
+                          income: bool = False, date: str = '') -> None:
             """
             Transforms the arguments into valid page insertion data for the API and calls it.
+    
             It calls self.get_tags() if self.tags_cache is empty in order to be able to validate the
             tags the user is attempting to pass into the database.
     
@@ -111,20 +110,19 @@ class NBudgetController(self, settings: dict = None, raises: bool = True):
             :param tags: List[str], the record's tags. Empty by default.
             :param income: bool, if the record is an INCOME type. False by default.
             :param date: str, the record's date. None by default, which will use today's date.
-            
             :return: None
             :raises InvalidTag: If the user attempted to use a tag that did not exist in Notion's db
-            :raises APIError, if thr request went right but the API returned an error
+            :raises APIError, if the request went right but the API returned an error
             :raises HTTPError, if the request went wrong
     
-            Lets the following exceptions escalate:
+            Lets all self._format_date() and self.get_tags() exceptions escalate:
     
-            From self._format_date()
+            From self._format_date():
             :raises InvalidDateFormat: If there is a missing key (D, M, Y) in date_input_format
             :raises InvalidDate: If there is a missing value in date
             :raises InvalidDateRange: If either day, month, or year is beyond range
     
-            From self.get_tags()
+            From self.get_tags():
             :raises APIError, if a request went right but the API returned an error
             :raises HTTPError, if a request went wrong
             :raises APIParsingError: if there were errors when attempting to parse the Tags API response
