@@ -1,23 +1,24 @@
 # nbudget
-Terminal front-end for budget database via [Notion API]("https://developers.notion.com/"). 
+CLI frontend for budget database via [Notion API]("https://developers.notion.com/"). 
 
-Allows user to insert records into a simple budget database, and to query the current tag names in it.
+Allows user to insert records into a simple budget database.
 
 ![](https://github.com/tfari/nbudget/blob/main/nbudget_animation.gif)
 
 ## Requirements:
 * A shared Notion database formatted as shown in Setup
 * A Notion API key to access said database
-* At first run, the script will prompt the user to generate a settings file, asking for the database's ID,
+* At first run, the script will prompt the user to generate a settings file, asking for the database's ID
 and the API key to access it, populating the rest of the options with default values.
 
 ## Usage:
 ```
-nbudget.py [-h] [-w] [-t] [-i] [-d DATE] CONCEPT AMOUNT [TAG [TAG ...]]
+usage: nbudget.py [-h] [-w] [-t] [-i] [-d DATE] CONCEPT AMOUNT [TAG [TAG ...]]
 
 Interface for a simple budget database in Notion using Notion's API. The database needs to be structured as follows:
-Type(select), Date(date), Concept(title), Amount(number), Tags(multi_select). The names of each column can be others (as
-long as the types are respected), but you will have to edit the settings.json file so the script knows their new names.
+Type(select) -> with two options: "INCOME" and "EXPENSE", Date(date), Concept(title), Amount(number) -> formatted as
+Dollars, Tags(multi_select). The names of each column can be others (as long as the types are respected), but you will
+have to edit the settings.json file so the script knows their new names.
 
 positional arguments:
   CONCEPT               The concept for the record.
@@ -28,20 +29,19 @@ optional arguments:
   -h, --help            show this help message and exit
   -w, --wizard          Run the settings wizard and exit.
   -t, --tags            Output the current tag names in the database and exit.
-  -i, --income          Record is considered an income instead of an expense.
+  -i, --income          Record is considered an INCOME instead of an EXPENSE.
   -d DATE, --date DATE  The date to use for the expense record, if not used the current day will be used.
 ```
 
-The only required arguments are **CONCEPT** and **AMOUNT**, as date will default to the current day's date,
-and income to "EXPENSE".
-
 ## Setup:
 
+![](https://github.com/tfari/nbudget/blob/main/budget_db.png)
+
 The Notion database must contain the following columns:
-* Type (select) -> Must have two options: "INCOME" and "EXPENSE"
+* Type (select) -> with two options: "INCOME" and "EXPENSE"
 * Date (date)
 * Concept (title)
-* Amount (number, formatted as Dollar)
+* Amount (number) -> formatted as Dollar
 * Tags (multiselect) -> Can have any options the User choses
 
 The names of these columns can be altered, but should be specified in the settings.json file. New
@@ -76,28 +76,27 @@ get_default_settings(database_id: str, api_key: str) -> dict:
     """
 ```
 ```
-class NBudgetController:
+class NBudgetController(self, settings: dict = None, raises: bool = True):
     """
-    Controller class for budget databases on Notion(self, settings: dict = None, raises: bool = True):
-        """
-        Controller class for budget databases on Notion.
-        
-        :param settings: dict, settings file
-        :param raises: bool, When we run the script via terminal we want the errors to be printed
-        into the terminal, when the script is being ran as a module, we want to raise our errors
-        instead. By default we raise.
+    Controller class for budget databases on Notion.
+    
+    :param settings: dict, settings file
+    :param raises: bool, When we run the script via terminal we want the errors to be printed
+    into the terminal, when the script is being ran as a module, we want to raise our errors
+    instead. By default we raise.
     """
     
         def clear_tags_cache(self) -> None:
             """ Empty self.tags_cache """
-            # Don't constantly re-get tags when we are using this iteratively
         
         def get_tags(self) -> List[str]:
-            """ Get the tags from the Notion's database.
+            """ 
+            Get the tags from the Notion's database.
             Fills self.tags_cache and returns them.
 
             :return: List[str], Tag names
             :raises APIParsingError: if there were errors when attempting to parse the API response
+            """
         
         
         def insert_record(self, concept: str, amount: float, tags: List[str] = None,
@@ -112,6 +111,7 @@ class NBudgetController:
             :param tags: List[str], the record's tags. Empty by default.
             :param income: bool, if the record is an INCOME type. False by default.
             :param date: str, the record's date. None by default, which will use today's date.
+            
             :return: None
             :raises InvalidTag: If the user attempted to use a tag that did not exist in Notion's db
             :raises APIError, if thr request went right but the API returned an error

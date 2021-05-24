@@ -257,6 +257,7 @@ class NBudgetController:
         :param tags: List[str], the record's tags. Empty by default.
         :param income: bool, if the record is an INCOME type. False by default.
         :param date: str, the record's date. None by default, which will use today's date.
+
         :return: None
         :raises InvalidTag: If the user attempted to use a tag that did not exist in Notion's db
         :raises APIError, if thr request went right but the API returned an error
@@ -461,10 +462,11 @@ if __name__ == '__main__':
     # Terminal entry points
 
     _DESC = 'Interface for a simple budget database in Notion using Notion\'s API. The database ' \
-            'needs to be structured as follows: Type(select), Date(date), Concept(title), ' \
-            'Amount(number), Tags(multi_select). The names of each column can be others ' \
-            '(as long as the types are respected), but you will have to edit the settings.json ' \
-            'file so the script knows their new names. '
+            'needs to be structured as follows: Type(select) -> with two options: "INCOME" and ' \
+            '"EXPENSE", Date(date), Concept(title), Amount(number) -> formatted as Dollars, ' \
+            'Tags(multi_select). The names of each column can be others (as long as the types are' \
+            ' respected), but you will have to edit the settings.json file so the script knows ' \
+            'their new names. '
 
     argument_parser = argparse.ArgumentParser(description=_DESC)
 
@@ -473,7 +475,7 @@ if __name__ == '__main__':
     t_help = 'Output the current tag names in the database and exit.'
     argument_parser.add_argument('-t', '--tags', nargs=0, action=GetTags, help=t_help)
 
-    i_help = 'Record is considered an income instead of an expense.'
+    i_help = 'Record is considered an INCOME instead of an EXPENSE.'
     argument_parser.add_argument('-i', '--income', action='store_true', help=i_help)
     d_help = 'The date to use for the expense record, if not used the current day will be used.'
     argument_parser.add_argument('-d', '--date', metavar='DATE', type=str, nargs=1, help=d_help)
