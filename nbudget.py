@@ -70,7 +70,7 @@ import urllib.request
 from copy import deepcopy
 from urllib.error import HTTPError
 from http.client import HTTPResponse
-from typing import List
+from typing import Dict, List, Type
 
 _PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -78,7 +78,7 @@ _SETTINGS_KEY_VALIDATION = ['database_id', 'api_key', 'date_input_format', 'tag_
                             'type_name', 'date_name', 'concept_name', 'amount_name', 'tags_name']
 
 
-def _err(error_msg: str):
+def _err(error_msg: str) -> None:
     """
     Avoid cluttering stdout with raises. Print error message and exit.
     :param error_msg: str, error message to print.
@@ -88,16 +88,16 @@ def _err(error_msg: str):
     sys.exit(1)
 
 
-def get_default_settings(database_id: str, api_key: str) -> dict:
+def get_default_settings(database_id: str, api_key: str) -> Dict[str, str]:
     """
     :param database_id: str, A valid Notion's database id accessible via the api_key.
     :param api_key: str, A valid Notion's api_key that has access to the database under database_id.
-    :returns: dict, A default settings dictionary with the users information.
+    :returns: Dict[str, str], A default settings dictionary with the users information.
     :raises TypeError: if database_id or api_key are not string objects.
     """
-    if not (type(database_id) == str):
+    if not isinstance(database_id, str):
         raise TypeError('Expected str for database_id, got: %s' % database_id)
-    if not (type(api_key) == str):
+    if not isinstance(api_key, str):
         raise TypeError('Expected str for database_id, got: %s' % database_id)
 
     return {
@@ -126,16 +126,16 @@ class NBudgetController:
         "Notion-Version": "2021-05-13"
     }
 
-    def __init__(self, settings: dict = None, raises: bool = True):
+    def __init__(self, settings: Dict[str, str], raises: bool = True):
         """
         Controller class for budget databases on Notion.
 
-        :param settings: dict, settings file
+        :param settings: Dict[str, str], settings file
         :param raises: bool, When we run the script via terminal we want the errors to be printed
         into the terminal, when the script is being ran as a module, we want to raise our errors
         instead. By default we raise.
         """
-        self.settings: dict = settings
+        self.settings: Dict[str, str] = settings
         self.raises: bool = raises
         # Don't constantly re-get tags when we are using this iteratively
         self.tags_cache: List[str] = []
@@ -150,17 +150,16 @@ class NBudgetController:
         """ Empty self.tags_cache """
         self.tags_cache = []
 
-    def _wrap_error(self, error_msg: str, e):
+    def _wrap_error(self, error_msg: str, exception: Type[Exception]):
         """
         Wraps an error to decide if raising or calling _err depending on self.raises
         :param error_msg: str, error message to print
-        :param e: Exception, exception to raise
+        :param exception: Exception, exception to raise
         :raises e: if self.raises, else SystemExit
         """
         if self.raises:
-            raise e(error_msg)
-        else:
-            _err(error_msg)
+            raise exception(error_msg)
+        _err(error_msg)
 
     def _api_call(self, url, headers, data=None) -> dict:
         """
@@ -173,22 +172,22 @@ class NBudgetController:
         :raises APIError, if the request went right but the API returned an error
         :raises HTTPError, if the request went wrong
         """
-        r = urllib.request.Request(url, headers=headers, data=data)
+        request_object = urllib.request.Request(url, headers=headers, data=data)
         try:
-            response: HTTPResponse = urllib.request.urlopen(r)
-        except HTTPError as e:
+            response: HTTPResponse = urllib.request.urlopen(request_object)
+        except HTTPError as exception:
             try:
                 # Check if the error is from the API or HTTP by attempting to JSON the response
-                err_json = json.loads(e.read())
+                err_json = json.loads(exception.read())
                 # TODO: self._parse_api_error() -> Give better feedback?
-                self._wrap_error('Api Error: %s -> %s' % (err_json['code'], err_json['message']),
-                                 self.APIError)
+                return self._wrap_error('Api Error: %s -> %s'
+                                        % (err_json['code'], err_json['message']), self.APIError)
             except json.decoder.JSONDecodeError:
-                if e.code == 403:  # This can happen if the UA is using python-urllib
-                    self._wrap_error('HTTP Error: %s -> Check what you are sending if you have '
-                                     'modified the script' % e.code, self.HTTPError)
-                else:
-                    self._wrap_error('HTTP Error: %s' % e.code, self.HTTPError)
+                if exception.code == 403:  # This can happen if the UA is using python-urllib
+                    return self._wrap_error('HTTP Error: %s -> Check your UA if you have modified '
+                                            'the script' % exception.code, self.HTTPError)
+
+                return self._wrap_error('HTTP Error: %s' % exception.code, self.HTTPError)
         else:
             return json.loads(response.read())
 
@@ -207,9 +206,9 @@ class NBudgetController:
             options = [o['name'] for o in response[
                 'properties'][tags_name]['multi_select']['options']]
 
-        except KeyError as e:  # Parsing error
+        except KeyError as exception:  # Parsing error
             # Check what kind of key is missing
-            if e.args[0] == tags_name:  # Tags column name
+            if exception.args[0] == tags_name:  # Tags column name
 
                 # Detect if there is another column with multi_select type, multiple, or none
                 multi_selects = []
@@ -218,35 +217,36 @@ class NBudgetController:
                         multi_selects.append(key)
 
                 if len(multi_selects) == 1:
-                    self._wrap_error('APIParsingError: Column with name "%s" does not exist'
-                                     ' in the Notion database. Could it be "%s"? If it is then '
-                                     'change "tag_name" in the settings file for it.' %
-                                     (tags_name, multi_selects[0]), self.APIParsingError)
+                    return self._wrap_error('APIParsingError: Column with name "%s" does not '
+                                            'exist in the Notion database. Could it be "%s"? If '
+                                            'it is then change "tag_name" in the settings file '
+                                            'for it.' % (tags_name, multi_selects[0]),
+                                            self.APIParsingError)
                 elif len(multi_selects) > 1:
-                    self._wrap_error('APIParsingError: Column with name "%s" does not exist'
-                                     ' in the Notion database. Could it be one of these: %s? If one'
-                                     ' is then change "tag_name" in the settings file for it.' %
-                                     (tags_name, ', '.join(multi_selects)),
-                                     self.APIParsingError)
+                    return self._wrap_error('APIParsingError: Column with name "%s" does not exist'
+                                            'in the Notion database. Could it be one of these: '
+                                            '%s? If one is then change "tag_name" in the settings '
+                                            'file for it.' % (tags_name, ', '.join(multi_selects)),
+                                            self.APIParsingError)
                 else:
-                    self._wrap_error('APIParsingError: No multi_select type column found in'
-                                     ' Notion database.',
-                                     self.APIParsingError)
+                    return self._wrap_error('APIParsingError: No multi_select type column found in'
+                                            ' Notion database.',
+                                            self.APIParsingError)
 
-            elif e.args[0] == 'multi_select':  # Wrong column type
-                wrong_type = [k for k in response['properties'][tags_name].keys()][0]
-                self._wrap_error('APIParsingError: Type of the %s column is: "%s". '
-                                 'Must be "multi_select"' % (tags_name, wrong_type),
-                                 self.APIParsingError)
+            elif exception.args[0] == 'multi_select':  # Wrong column type
+                wrong_type = next(iter(response['properties'][tags_name]))
+                return self._wrap_error('APIParsingError: Type of the %s column is: "%s". '
+                                        'Must be "multi_select"' % (tags_name, wrong_type),
+                                        self.APIParsingError)
             else:
-                self._wrap_error('APIParsingError: Did not understand the API response: '
-                                 '%s' % response, self.APIParsingError)
+                return self._wrap_error('APIParsingError: Did not understand the API response: '
+                                        '%s' % response, self.APIParsingError)
         else:
             self.tags_cache = options
             return options
 
     def insert_record(self, concept: str, amount: float, tags: List[str] = None,
-                      income: bool = False, date: str = None) -> None:
+                      income: bool = False, date: str = '') -> None:
         """
         Transforms the arguments into valid page insertion data for the API and calls it.
         It calls self.get_tags() if self.tags_cache is empty in order to be able to validate the
@@ -276,48 +276,43 @@ class NBudgetController:
         :raises APIParsingError: if there were errors when attempting to parse the Tags API response
         """
         # Date parsing
-        if date is None:
-            # We don't want to clutter the database with time information
-            today = datetime.datetime.today()
-            date = datetime.date(today.year, today.month, today.day)
+        if date:
+            date_object = self._format_date(date, self.settings['date_input_format'])
         else:
-            date = self._format_date(date, self.settings['date_input_format'])
-        date = date.isoformat()  # Notion uses ISO 8601 Format
+            today = datetime.datetime.today()
+            # We don't want to clutter the database with time information
+            date_object = datetime.date(today.year, today.month, today.day)
+
+        iso_date = date_object.isoformat()  # Notion uses ISO 8601 Format
 
         # Income parsing
         record_type = 'EXPENSE' if not income else 'INCOME'
         amount = -amount if not income else amount
 
         # First build
-        data = {"parent": {"database_id": self.settings['database_id']},
-                "properties": {self.settings['type_name']: {"select": {"name": record_type}},
-                               self.settings['date_name']: {"date": {"start": date}},
-                               self.settings['concept_name']: {
-                                   "title": [{"text": {"content": concept}}]},
-                               self.settings['amount_name']: {"number": amount}
-                               }
-                }
+        data: dict = {"parent": {"database_id": self.settings['database_id']},
+                      "properties": {self.settings['type_name']: {"select": {"name": record_type}},
+                                     self.settings['date_name']: {"date": {"start": iso_date}},
+                                     self.settings['concept_name']: {
+                                         "title": [{"text": {"content": concept}}]},
+                                     self.settings['amount_name']: {"number": amount}
+                                     }
+                      }
 
         # Validate tags
         if tags:
-            # Make a call to the API to get the Tag names if the tags_cache is empty
             valid_options = self.tags_cache if self.tags_cache else self.get_tags()
 
-            # Validate tags against the one's gotten from Notion
-            for t in tags:
-                if t not in valid_options:
+            for tag in tags:
+                if tag not in valid_options:
                     self._wrap_error('InvalidTag: Tag does not exist in Notion db: %s, use one of '
-                                     'these: %s' % (t, ", ".join(valid_options)), self.InvalidTag)
+                                     'these: %s' % (tag, ", ".join(valid_options)), self.InvalidTag)
 
-            # Create the json objects and append them to the first build
-            tags = [{"name": t} for t in tags]
-            data['properties'][self.settings['tags_name']] = {"multi_select": tags}
+            tags_list = [{"name": t} for t in tags]
+            data['properties'][self.settings['tags_name']] = {"multi_select": tags_list}
 
-        # Encode data for urllib
-        data = str(data).replace("'", '"').encode()
-
-        # Do API call
-        self._api_call(self.page_insertion_query, self.headers, data)
+        encoded_data = str(data).replace("'", '"').encode()  # Encode data for urllib
+        self._api_call(self.page_insertion_query, self.headers, encoded_data)
 
     def _format_date(self, date: str, date_input_format: str) -> datetime.date:
         """
@@ -342,15 +337,15 @@ class NBudgetController:
                                split_date[split_date_input_format.index('M')], \
                                split_date[split_date_input_format.index('D')]
         except ValueError:  # Missing key in date_input_format
-            self._wrap_error('Invalid date_input_format in settings file: %s'
-                             % date_input_format, self.InvalidDateFormat)
+            return self._wrap_error('Invalid date_input_format in settings file: %s'
+                                    % date_input_format, self.InvalidDateFormat)
         except IndexError:  # Missing value in date
-            self._wrap_error('Invalid date: %s' % date, self.InvalidDate)
+            return self._wrap_error('Invalid date: %s' % date, self.InvalidDate)
         else:
             try:
                 return datetime.date(int(year), int(month), int(day))
             except ValueError:  # Either day, month, or year is beyond range
-                self._wrap_error('Invalid date range: %s' % date, self.InvalidDateRange)
+                return self._wrap_error('Invalid date range: %s' % date, self.InvalidDateRange)
 
     class InvalidDateRange(Exception):
         """ The date is beyond range """
@@ -387,19 +382,19 @@ def _read_settings(*, filepath='settings.json') -> dict:
             settings = json.load(settings_file)
         settings_file.close()
     except FileNotFoundError:
-        answer = _chose_option('There seems to not be any settings file. Do you want to set up one?'
-                               , ['Y', 'N'])
+        answer = _chose_option('Settings file does not exist. Create one?', ['Y', 'N'])
         if answer == 'Y':
             return _settings_wizard(filepath=filepath)
-        else:
-            _err(f'No {filepath} file.')
-    except json.decoder.JSONDecodeError as e:
-        _err('settings.json is malformed: %s\n Consider running the '
-             'settings_wizard by using -w option.' % e)
+
+        _err(f'No {filepath} file.')
+
+    except json.decoder.JSONDecodeError as exception:
+        _err('settings.json is malformed: %s\nConsider running the '
+             'settings_wizard by using -w option.' % exception)
 
     for key in _SETTINGS_KEY_VALIDATION:
         if key not in settings.keys():
-            _err('settings.json file is missing key: %s\n Consider running the '
+            _err('settings.json file is missing key: %s\nConsider running the '
                  'settings_wizard by using -w option.' % key)
 
     return settings
@@ -433,17 +428,18 @@ def _chose_option(prompt: str, valid_options: List[str]) -> str:
     """
     valid_options = [vo.upper() for vo in valid_options]
     valid_response = False
+    response = ''
     while not valid_response:
         response = input(f'[>] {prompt} {valid_options}')
         if response.upper() in valid_options:
-            valid_response = response
-    return valid_response
+            valid_response = True
+    return response
 
 
 class GetTags(argparse.Action):
     """ Creates a class for NBudgetController and calls get_tags() """
 
-    def __call__(self, parser, namespace, values, option_string):
+    def __call__(self, parser, namespace, values, option_string=None):
         settings = _read_settings()
         options = NBudgetController(settings, raises=False).get_tags()
         print(settings['tag_separator'].join(options))
@@ -453,7 +449,7 @@ class GetTags(argparse.Action):
 class RunWizard(argparse.Action):
     """ Calls _settings_wizard() """
 
-    def __call__(self, parser, namespace, values, option_string):
+    def __call__(self, parser, namespace, values, option_string=None):
         _settings_wizard()
         parser.exit()
 
@@ -470,21 +466,21 @@ if __name__ == '__main__':
 
     argument_parser = argparse.ArgumentParser(description=_DESC)
 
-    w_help = 'Run the settings wizard and exit.'
-    argument_parser.add_argument('-w', '--wizard', nargs=0, action=RunWizard, help=w_help)
-    t_help = 'Output the current tag names in the database and exit.'
-    argument_parser.add_argument('-t', '--tags', nargs=0, action=GetTags, help=t_help)
+    W_HELP = 'Run the settings wizard and exit.'
+    argument_parser.add_argument('-w', '--wizard', nargs=0, action=RunWizard, help=W_HELP)
+    T_HELP = 'Output the current tag names in the database and exit.'
+    argument_parser.add_argument('-t', '--tags', nargs=0, action=GetTags, help=T_HELP)
 
-    i_help = 'Record is considered an INCOME instead of an EXPENSE.'
-    argument_parser.add_argument('-i', '--income', action='store_true', help=i_help)
-    d_help = 'The date to use for the expense record, if not used the current day will be used.'
-    argument_parser.add_argument('-d', '--date', metavar='DATE', type=str, nargs=1, help=d_help)
-    concept_help = 'The concept for the record.'
-    argument_parser.add_argument('concept', metavar='CONCEPT', type=str, nargs=1, help=concept_help)
-    amount_help = 'The amount value for the record.'
-    argument_parser.add_argument('amount', metavar='AMOUNT', type=float, nargs=1, help=amount_help)
-    tag_help = 'A tag or tags for the record. Must be valid tags, if unsure, run "nbudget.py -t"'
-    argument_parser.add_argument('tags', metavar='TAG', type=str, nargs='*', help=tag_help)
+    I_HELP = 'Record is considered an INCOME instead of an EXPENSE.'
+    argument_parser.add_argument('-i', '--income', action='store_true', help=I_HELP)
+    D_HELP = 'The date to use for the expense record, if not used the current day will be used.'
+    argument_parser.add_argument('-d', '--date', metavar='DATE', type=str, nargs=1, help=D_HELP)
+    CONCEPT_HELP = 'The concept for the record.'
+    argument_parser.add_argument('concept', metavar='CONCEPT', type=str, nargs=1, help=CONCEPT_HELP)
+    AMOUNT_HELP = 'The amount value for the record.'
+    argument_parser.add_argument('amount', metavar='AMOUNT', type=float, nargs=1, help=AMOUNT_HELP)
+    TAG_HELP = 'A tag or tags for the record. Must be valid tags, if unsure, run "nbudget.py -t"'
+    argument_parser.add_argument('tags', metavar='TAG', type=str, nargs='*', help=TAG_HELP)
 
     parsed_arguments = argument_parser.parse_args()
     NBC = NBudgetController(_read_settings(), raises=False)
