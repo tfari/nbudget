@@ -6,7 +6,7 @@ Allows user to insert records into a simple budget database.
 ![](https://github.com/tfari/nbudget/blob/main/nbudget_animation.gif)
 
 ## Requirements:
-* A shared Notion database formatted as shown in Setup section.
+* A shared Notion database formatted as shown in [Setup](#Setup) section.
 * A Notion [API key]("https://www.notion.so/my-integrations") to access said database.
 * At first run, the script will prompt the user to generate a settings file, asking for the database's ID
 and the API key to access it, populating the rest of the options with default values.
