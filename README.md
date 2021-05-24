@@ -64,7 +64,7 @@ The settings.json file specifies the following possible setting configurations:
 * tags_name: The name of the Tags column. Default is `Tags`
 
 ## Public Interface
-Usage of the module to implement something over the budget databases controllers would typically be as follows:
+Usage of the module to implement something over the budget database controllers would typically be as follows:
 
 ```
 nbc = NBudgetController(get_default_settings('<MY_DB_ID>', '<API_KEY'>)
