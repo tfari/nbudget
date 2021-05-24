@@ -6,8 +6,8 @@ Allows user to insert records into a simple budget database.
 ![](https://github.com/tfari/nbudget/blob/main/nbudget_animation.gif)
 
 ## Requirements:
-* A shared Notion database formatted as shown in Setup
-* A Notion API key to access said database
+* A shared Notion database formatted as shown in Setup section.
+* A Notion [API key]("https://www.notion.so/my-integrations") to access said database.
 * At first run, the script will prompt the user to generate a settings file, asking for the database's ID
 and the API key to access it, populating the rest of the options with default values.
 
@@ -42,13 +42,13 @@ The Notion database must contain the following columns:
 * Date (date)
 * Concept (title)
 * Amount (number) -> formatted as Dollar
-* Tags (multiselect) -> Can have any options the User choses
+* Tags (multiselect) -> Can have any options the user chooses
 
 The names of these columns can be altered, but should be specified in the settings.json file. New
 columns can be added without issues, but the script would need to be altered if the user wants to
 fill them in through the utility.
 
-The instructions to share the database and get an API key for it are specified [here](https://developers.notion.com/docs)
+The instructions to share the database and to get an API key for it are specified [here](https://developers.notion.com/docs)
 
 ## Settings
 The settings.json file specifies the following possible setting configurations:
@@ -63,7 +63,14 @@ The settings.json file specifies the following possible setting configurations:
 * amount_name: The name of the Amount column. Default is `Amount`
 * tags_name: The name of the Tags column. Default is `Tags`
 
-## Interface
+## Public Interface
+Usage of the module to implement something over the budget databases controllers would typically be as follows:
+
+```
+nbc = NBudgetController(get_default_settings('<MY_DB_ID>', '<API_KEY'>)
+nbc2 = NBudgetController(get_default_settings('<MY_OTHER_DB_ID>', '<API_KEY'>)
+```
+
 The module provides the following public interfaces:
 
 ```
