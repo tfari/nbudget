@@ -38,11 +38,11 @@ optional arguments:
 ![](https://github.com/tfari/nbudget/blob/main/budget_db.png)
 
 The Notion database must contain the following columns:
-* Type (select) -> with two options: "INCOME" and "EXPENSE"
+* Type (select) →  with two options: "INCOME" and "EXPENSE"
 * Date (date)
 * Concept (title)
-* Amount (number) -> formatted as Dollar
-* Tags (multiselect) -> Can have any options the user chooses
+* Amount (number) →  formatted as Dollar
+* Tags (multiselect) →  Can have any options the user chooses
 
 The names of these columns can be altered, but should be specified in the settings.json file. New
 columns can be added without issues, but the script would need to be altered if the user wants to
