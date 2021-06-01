@@ -73,7 +73,7 @@ nbc2 = NBudgetController(get_default_settings('<MY_OTHER_DB_ID>', '<API_KEY'>)
 
 The module provides the following public interfaces:
 
-```
+```python
 def get_default_settings(database_id: str, api_key: str) -> Dict[str, str]:
     """
     :param database_id: str, A valid Notion's database id accessible via the api_key.
@@ -82,7 +82,7 @@ def get_default_settings(database_id: str, api_key: str) -> Dict[str, str]:
     :raises TypeError: if database_id or api_key are not string objects.
     """
 ```
-```
+```python
     class NBudgetController(self, settings: Dict[str, str], raises: bool = True):
         """
         Controller class for budget databases on Notion.
