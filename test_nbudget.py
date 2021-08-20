@@ -162,6 +162,14 @@ class Test(unittest.TestCase):
         nbudget.GetTags.__call__(None, mock.Mock(), None, None, None)
         mocked_method.assert_called()
 
+    @mock.patch('nbudget.NBudgetController.get_count', create=True)
+    def test_GetCount(self, mocked_method):
+        """ Test GetCount.__call__() calls NBudget """
+        mock__read_settings = mock.patch('nbudget._read_settings', create=True)
+        mock__read_settings.return_value = nbudget.get_default_settings('abc', 'bcd')
+        nbudget.GetCount.__call__(None, mock.Mock(), None, None, None)
+        mocked_method.assert_called()
+
     @mock.patch('nbudget._settings_wizard')
     def test_RunWizard(self, mocked_method):
         """ Test RunWizard.__call__() calls NBudget"""
@@ -301,6 +309,16 @@ class TestNBudgetController(unittest.TestCase):
         return_value = {'abd': {'ee': {'ff': {'ag32': [{'name': 'a'}, {'name': 'b'}]}}}}
         mocked_api_call.side_effect = [return_value]
         self.assertRaises(self.NBudgetController.APIParsingError, self.NBudgetController.get_tags)
+
+    @mock.patch('nbudget.NBudgetController._api_call', create=True)
+    def test_get_count_right(self, mocked_api_call):
+        """ Tests get_count calls _api_call and counts right."""
+        expected = 50
+        return_value = {'results': [{'properties': {'Amount': {'number': 100}}},
+                                    {'properties': {'Amount': {'number': -50}}}],
+                        'next_cursor': None}
+        mocked_api_call.side_effect = [return_value]
+        self.assertEqual(expected, self.NBudgetController.get_count())
 
     @mock.patch('nbudget.NBudgetController._api_call', create=True)
     def test_insert_record_right(self, mocked_api_call):

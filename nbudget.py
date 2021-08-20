@@ -17,7 +17,7 @@ The name of these columns can be altered, but if one does so should also alter t
 values on settings.json.
 
 Usage:
-usage: nbudget.py [-h] [-w] [-t] [-i] [-d DATE] CONCEPT AMOUNT [TAG [TAG ...]]
+usage: nbudget.py [-h] [-w] [-t] [-c] [-i] [-d DATE] CONCEPT AMOUNT [TAG [TAG ...]]
 positional arguments:
   CONCEPT               The concept for the record.
   AMOUNT                The amount value for the record.
@@ -27,6 +27,7 @@ optional arguments:
   -h, --help            show this help message and exit
   -w, --wizard          Run the settings wizard and exit.
   -t, --tags            Output the current tag names in the database and exit.
+  -c, --count           Output the current balance of the database and exit.
   -i, --income          Record is considered an INCOME instead of an EXPENSE.
   -d DATE, --date DATE  The date to use for the expense record, current day is used by default.
 
@@ -42,6 +43,7 @@ exposed:
     to get the tags every time if we are inserting records iteratively, so we instead save a cache
     of them the first time. This methods allows for emptying this cache so we get the tags again.
     * get_tags() -> Gets a list of the current tag's names.
+    * get_count() -> Gets the current balance of the buget database.
     * insert_record(concept: str, amount: float, tags: list = None, income: str = 'OUT',
                     date: str = None) -> Inserts a record.
 
@@ -116,6 +118,7 @@ class NBudgetController:
     """
     _DATABASE_QUERY = 'https://api.notion.com/v1/databases/%s'
     _PAGE_INSERTION_QUERY = 'https://api.notion.com/v1/pages'
+    _DATABASE_CONTENTS_QUERY = 'https://api.notion.com/v1/databases/%s/query'
     _HEADERS = {
         "User-Agent": "",  # Notion is using cloudflare to filter python-urllib's UA
         "Content-Type": "application/json",
@@ -138,6 +141,8 @@ class NBudgetController:
 
         self.page_insertion_query = NBudgetController._PAGE_INSERTION_QUERY
         self.database_query_url = NBudgetController._DATABASE_QUERY % self.settings['database_id']
+        self.database_contents_query = NBudgetController._DATABASE_CONTENTS_QUERY \
+                                       % self.settings['database_id']
         self.headers = deepcopy(NBudgetController._HEADERS)
         self.headers['Authorization'] = self.headers['Authorization'] % self.settings['api_key']
 
@@ -221,6 +226,36 @@ class NBudgetController:
             wrong_type = next(iter(properties[tags_column_name]))
             return self._wrap_error(f'Type of the {tags_column_name} column is: "{wrong_type}".'
                                     f' Must be "multi_select"', self.APIParsingError)
+
+    def get_count(self) -> int:
+        """
+        Get the current balance from the Notion's database.
+
+        :return: int, budget database balance
+        """
+        # TODO: Refactor this
+        data = {'page_size': 100}
+        encoded_data = str(data).replace("'", '"').encode() # Encode data for urllib
+        response = self._api_call(self.database_contents_query, self.headers, encoded_data)
+        total_sum = 0
+        for r in response['results']:
+            try:
+                total_sum += r['properties'][self.settings['amount_name']]['number']
+            except KeyError as c:
+                pass
+
+        while response['next_cursor']:
+            next_cursor = response['next_cursor']
+            data['start_cursor'] = next_cursor
+            encoded_data = str(data).replace("'", '"').encode()  # Encode data for urllib
+            response = self._api_call(self.database_contents_query, self.headers, encoded_data)
+            for r in response['results']:
+                try:
+                    total_sum += r['properties'][self.settings['amount_name']]['number']
+                except KeyError as c:
+                    pass
+
+        return total_sum
 
     def insert_record(self, concept: str, amount: float, tags: List[str] = None,
                       income: bool = False, date: str = '') -> None:
@@ -419,6 +454,15 @@ class GetTags(argparse.Action):
         parser.exit()
 
 
+class GetCount(argparse.Action):
+    """ Creates an instance of NBudgetController and calls get_count() """
+    def __call__(self, parser, namespace, values, option_string=None):
+        settings = _read_settings()
+        count = NBudgetController(settings, raises=False).get_count()
+        print('$', count)
+        parser.exit()
+
+
 class RunWizard(argparse.Action):
     """ Calls _settings_wizard() """
     def __call__(self, parser, namespace, values, option_string=None):
@@ -440,6 +484,8 @@ if __name__ == '__main__':
     argument_parser.add_argument('-w', '--wizard', nargs=0, action=RunWizard, help=W_HELP)
     T_HELP = 'Output the current tag names in the database and exit.'
     argument_parser.add_argument('-t', '--tags', nargs=0, action=GetTags, help=T_HELP)
+    C_HELP = 'Output the current balance of the database and exit.'
+    argument_parser.add_argument('-c', '--count', nargs=0, action=GetCount, help=C_HELP)
 
     I_HELP = 'Record is considered an INCOME instead of an EXPENSE.'
     argument_parser.add_argument('-i', '--income', action='store_true', help=I_HELP)

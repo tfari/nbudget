@@ -1,7 +1,8 @@
 # 💸 nbudget
 CLI frontend for a budget database in Notion, via [Notion API]("https://developers.notion.com/").
 
-Allows user to insert records into a simple budget database.
+Allows user to insert records into a simple budget database, as well as querying the sum of this
+database.
 
 ![](https://github.com/tfari/nbudget/blob/main/nbudget_animation.gif)
 
@@ -13,7 +14,7 @@ and the API key to access it, populating the rest of the options with default va
 
 ## Usage:
 ```
-usage: nbudget.py [-h] [-w] [-t] [-i] [-d DATE] CONCEPT AMOUNT [TAG [TAG ...]]
+usage: nbudget.py [-h] [-w] [-t] [-c] [-i] [-d DATE] CONCEPT AMOUNT [TAG [TAG ...]]
 
 Interface for a simple budget database in Notion using Notion's API. The database needs to be structured as follows:
 Type(select) -> with two options: "INCOME" and "EXPENSE", Date(date), Concept(title), Amount(number) -> formatted as
@@ -29,6 +30,7 @@ optional arguments:
   -h, --help            show this help message and exit
   -w, --wizard          Run the settings wizard and exit.
   -t, --tags            Output the current tag names in the database and exit.
+  -c, --count           Output the current balance of the database and exit.
   -i, --income          Record is considered an INCOME instead of an EXPENSE.
   -d DATE, --date DATE  The date to use for the expense record, if not used the current day will be used.
 ```
@@ -103,9 +105,17 @@ def get_default_settings(database_id: str, api_key: str) -> Dict[str, str]:
             :return: List[str], Tag names
             :raises APIParsingError: if there were errors when attempting to parse the API response
             """
-            
+        
+        def get_count(self) -> int:
+            """
+            Get the current balance from the Notion's database.
+
+            :return: int, budget database balance
+            """
+    
+    
         def insert_record(self, concept: str, amount: float, tags: List[str] = None,
-                          income: bool = False, date: str = '') -> None:
+                  income: bool = False, date: str = '') -> None:
             """
             Transforms the arguments into valid page insertion data for the API and calls it.
     
